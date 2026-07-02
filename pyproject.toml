@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "store-assistant"
+version = "0.1.0"
+description = "Conversational LLM store assistant demo"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=2.29",
+    "pydantic-ai>=2.3",
+    "python-dotenv>=1.0",
+    "streamlit>=1.36",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
