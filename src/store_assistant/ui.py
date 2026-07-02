@@ -28,6 +28,11 @@ def main() -> None:
     )
 
     with chat_tab:
+        if st.button("New conversation"):
+            st.session_state.controller = create_controller(db, settings)
+            st.session_state.chat_messages = []
+            st.rerun()
+
         for message in st.session_state.chat_messages:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
