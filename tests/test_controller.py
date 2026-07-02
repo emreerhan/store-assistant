@@ -78,7 +78,7 @@ def test_us_phone_validation_is_format_level() -> None:
 
     response = controller.handle_user_message("Save Corner Market with 1234321235")
     assert response.content == (
-        "Did you mean (123) 432-1235? Reply yes to save it or no to enter it again."
+        "Did you mean +1 (123) 432-1235? Reply yes to save it or no to enter it again."
     )
     assert db.list_stores() == []
 
@@ -92,7 +92,7 @@ def test_convertible_dashed_phone_requires_confirmation() -> None:
 
     response = controller.handle_user_message("Save Aldi with 555-456-7890")
 
-    assert "Did you mean (555) 456-7890" in response.content
+    assert "Did you mean +1 (555) 456-7890" in response.content
     assert controller.state == ConversationState.AWAITING_PHONE_CONFIRMATION
     assert db.list_stores() == []
 
@@ -160,7 +160,7 @@ def test_phone_confirmation_can_be_rejected_and_reentered() -> None:
     db, controller = make_controller()
 
     response = controller.handle_user_message("Save Corner Market with 1234321235")
-    assert "Did you mean (123) 432-1235" in response.content
+    assert "Did you mean +1 (123) 432-1235" in response.content
 
     response = controller.handle_user_message("no")
     assert "format (555) 234-5678" in response.content
@@ -209,6 +209,24 @@ def test_save_missing_phone_then_exact_phone() -> None:
     assert db.list_stores()[0].phone == "+15552345678"
 
 
+def test_awaiting_phone_spaced_number_requires_confirmation_before_save() -> None:
+    db, controller = make_controller()
+
+    controller.handle_user_message("save hello")
+    controller.handle_user_message("123")
+    response = controller.handle_user_message("123 123 1234")
+
+    assert response.content == (
+        "Did you mean +1 (123) 123-1234? Reply yes to save it or no to enter it again."
+    )
+    assert controller.state == ConversationState.AWAITING_PHONE_CONFIRMATION
+    assert db.list_stores() == []
+
+    response = controller.handle_user_message("yes")
+    assert "Saved hello" in response.content
+    assert db.list_stores()[0].phone == "+11231231234"
+
+
 def test_upsert_existing_store_updates_single_row() -> None:
     db, controller = make_controller()
 
@@ -244,7 +262,7 @@ def test_repeated_mixed_operations_in_one_conversation() -> None:
     controller.handle_user_message("Lookup Trader Joe")
     controller.handle_user_message("open-sesame")
     response = controller.handle_user_message("Save Whole Foods with 555-345-6789")
-    assert "Did you mean (555) 345-6789" in response.content
+    assert "Did you mean +1 (555) 345-6789" in response.content
     controller.handle_user_message("yes")
 
     stores = db.list_stores()

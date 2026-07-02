@@ -30,7 +30,7 @@ def interpret_us_phone(phone: str) -> PhoneInterpretation | None:
     exact_format = is_exact_us_phone_format(phone)
     return PhoneInterpretation(
         normalized=f"+1{digits}",
-        display=format_us_phone(digits),
+        display=format_us_phone_with_country(digits),
         exact_format=exact_format,
     )
 
@@ -51,3 +51,7 @@ def format_us_phone(digits: str) -> str:
     if len(digits) == 11 and digits.startswith("1"):
         digits = digits[1:]
     return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+
+
+def format_us_phone_with_country(digits: str) -> str:
+    return f"+1 {format_us_phone(digits)}"
