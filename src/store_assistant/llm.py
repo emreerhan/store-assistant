@@ -203,6 +203,12 @@ def _extract_save_name(text: str, phone: str | None) -> str | None:
     if phone:
         candidate = candidate.replace(phone, " ")
     candidate = re.sub(
+        r"\b(?:with|at|as|is)\s+[\d\s().+-]+$",
+        " ",
+        candidate,
+        flags=re.IGNORECASE,
+    )
+    candidate = re.sub(
         r"\b(save|add|remember|update|store this|store|grocery store|phone|number|with|at|is|as)\b",
         " ",
         candidate,

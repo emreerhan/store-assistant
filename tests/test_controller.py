@@ -37,6 +37,30 @@ def test_invalid_phone_reprompts_and_does_not_save() -> None:
     assert stores[0].phone == "+15552345678"
 
 
+def test_partial_phone_in_save_request_is_not_added_to_store_name() -> None:
+    db, controller = make_controller()
+
+    response = controller.handle_user_message("save trader joe's supermarket with 123")
+    assert response.content == "What is the phone number for trader joe's supermarket?"
+
+    response = controller.handle_user_message("(667) 123-4321")
+    assert "Saved trader joe's supermarket" in response.content
+
+    stores = db.list_stores()
+    assert len(stores) == 1
+    assert stores[0].display_name == "trader joe's supermarket"
+    assert stores[0].phone == "+16671234321"
+
+
+def test_us_phone_validation_is_format_level() -> None:
+    db, controller = make_controller()
+
+    response = controller.handle_user_message("Save Corner Market with 1234321235")
+
+    assert "Saved Corner Market" in response.content
+    assert db.list_stores()[0].phone == "+11234321235"
+
+
 def test_lookup_is_gated_by_passphrase() -> None:
     db, controller = make_controller(passphrase="secret")
     controller.handle_user_message("Save Trader Joe's with (555) 234-5678")

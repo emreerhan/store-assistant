@@ -12,9 +12,6 @@ def normalize_us_phone(phone: str) -> str | None:
         digits = digits[1:]
     if len(digits) != 10:
         return None
-    area, exchange = digits[:3], digits[3:6]
-    if area[0] in {"0", "1"} or exchange[0] in {"0", "1"}:
-        return None
     return f"+1{digits}"
 
 
