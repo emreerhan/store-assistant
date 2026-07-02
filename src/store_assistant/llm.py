@@ -147,10 +147,8 @@ class HeuristicLLMClient:
         off_scope_count = max(off_scope_count, assistant_off_scope_count)
 
         parts = []
-        if saved:
-            parts.append("Saved " + ", ".join(saved) + ".")
-        if retrieved:
-            parts.append("Retrieved " + ", ".join(retrieved) + ".")
+        parts.extend(f"Saved {item}." for item in saved)
+        parts.extend(f"Retrieved {item}." for item in retrieved)
         if confirmations:
             parts.append(
                 f"Confirmed reformatted phone number(s) {confirmations} time(s)."
