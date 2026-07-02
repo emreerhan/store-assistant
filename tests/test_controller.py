@@ -77,6 +77,20 @@ def test_us_phone_validation_is_format_level() -> None:
     assert db.list_stores()[0].phone == "+11234321235"
 
 
+def test_overlong_phone_in_save_request_reprompts_and_does_not_save() -> None:
+    db, controller = make_controller()
+
+    response = controller.handle_user_message("save whole foods c with 433213213211")
+
+    assert "valid US phone" in response.content
+    assert controller.state == ConversationState.AWAITING_SAVE_PHONE
+    assert db.list_stores() == []
+
+    response = controller.handle_user_message("(433) 213-2132")
+    assert "Saved whole foods c" in response.content
+    assert db.list_stores()[0].phone == "+14332132132"
+
+
 def test_phone_confirmation_can_be_rejected_and_reentered() -> None:
     db, controller = make_controller()
 

@@ -226,18 +226,21 @@ def _looks_off_scope(lower: str) -> bool:
 
 
 def _extract_phone(text: str) -> str | None:
-    match = re.search(
-        r"(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}",
-        text,
-    )
-    if match:
-        return match.group(0)
     trailing_match = re.search(
         r"\b(?:with|at|is|as)\s+([+\d][\d\s().+-]*)$",
         text,
         flags=re.IGNORECASE,
     )
-    return trailing_match.group(1).strip() if trailing_match else None
+    if trailing_match:
+        return trailing_match.group(1).strip()
+
+    match = re.search(
+        r"(?<!\d)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\d)",
+        text,
+    )
+    if match:
+        return match.group(0)
+    return None
 
 
 def _extract_save_name(text: str, phone: str | None) -> str | None:
