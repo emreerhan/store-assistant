@@ -59,7 +59,7 @@ def main() -> None:
                     }
                     for store in stores
                 ],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
         else:

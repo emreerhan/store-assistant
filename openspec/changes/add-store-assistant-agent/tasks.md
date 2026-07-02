@@ -49,4 +49,4 @@
 - [x] 6.4 Add tests for done/off-scope termination and persisted summary creation.
 - [x] 6.5 Add tests for SQLite tracing of LLM calls and persisted messages.
 - [x] 6.6 Run the automated test suite and fix failures.
-- [ ] 6.7 Manually verify the Streamlit demo can save, retrieve, terminate, and show persisted traces locally.
+- [x] 6.7 Manually verify the Streamlit demo can save, retrieve, terminate, and show persisted traces locally.
