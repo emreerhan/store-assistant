@@ -8,7 +8,11 @@ from typing import Callable
 from store_assistant.db import StoreAssistantDB
 from store_assistant.llm import HeuristicLLMClient, LLMClient
 from store_assistant.models import AssistantResponse, ConversationState, Intent, IntentResult
-from store_assistant.normalization import clean_display_name, normalize_store_name
+from store_assistant.normalization import (
+    clean_display_name,
+    clean_extracted_store_name,
+    normalize_store_name,
+)
 from store_assistant.phone import interpret_us_phone
 
 
@@ -78,11 +82,12 @@ class ConversationController:
     def _start_save(
         self, intent: IntentResult, original_message: str | None = None
     ) -> AssistantResponse:
-        if not intent.store_name:
+        store_name = clean_extracted_store_name(intent.store_name)
+        if not store_name:
             self.state = ConversationState.AWAITING_SAVE_NAME
             return self._assistant_message("What is the store name?")
 
-        self.pending_store_name = clean_display_name(intent.store_name)
+        self.pending_store_name = clean_display_name(store_name)
         phone = _extract_trailing_phone_candidate(original_message) or intent.phone
         if not phone:
             self.state = ConversationState.AWAITING_SAVE_PHONE
@@ -93,7 +98,7 @@ class ConversationController:
         return self._save_store(self.pending_store_name, phone)
 
     def _handle_save_name(self, message: str) -> AssistantResponse:
-        name = clean_display_name(message)
+        name = clean_display_name(clean_extracted_store_name(message) or "")
         if not name:
             return self._assistant_message("What is the store name?")
         self.pending_store_name = name
@@ -172,15 +177,16 @@ class ConversationController:
         )
 
     def _start_lookup(self, intent: IntentResult) -> AssistantResponse:
-        if not intent.store_name:
+        store_name = clean_extracted_store_name(intent.store_name)
+        if not store_name:
             self.state = ConversationState.AWAITING_LOOKUP_NAME
             return self._assistant_message("Which store should I look up?")
-        self.pending_lookup_name = clean_display_name(intent.store_name)
+        self.pending_lookup_name = clean_display_name(store_name)
         self.state = ConversationState.AWAITING_PASSPHRASE
         return self._assistant_message("What is the lookup passphrase?")
 
     def _handle_lookup_name(self, message: str) -> AssistantResponse:
-        name = clean_display_name(message)
+        name = clean_display_name(clean_extracted_store_name(message) or "")
         if not name:
             return self._assistant_message("Which store should I look up?")
         self.pending_lookup_name = name

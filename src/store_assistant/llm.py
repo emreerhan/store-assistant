@@ -7,6 +7,7 @@ from typing import Literal, Protocol
 from pydantic import BaseModel, Field
 
 from store_assistant.models import Intent, IntentResult
+from store_assistant.normalization import clean_extracted_store_name
 
 
 class LLMClient(Protocol):
@@ -46,7 +47,10 @@ class PydanticAILLMClient:
                 "Use lookup when the user wants to retrieve a store phone. "
                 "Use done when the user says they are done or good. "
                 "Use off_scope for anything unrelated to saving or retrieving store phones. "
-                "Extract store_name and phone only when present in the user's text."
+                "Extract store_name and phone only when present in the user's text. "
+                "Do not include request words or politeness such as save, add, store, "
+                "phone number, please, or for me in store_name. If the store name is "
+                "not clear, leave store_name null so the assistant can ask."
             ),
         )
         self._summary_agent = Agent(
@@ -257,8 +261,7 @@ def _extract_save_name(text: str, phone: str | None) -> str | None:
         candidate,
         flags=re.IGNORECASE,
     )
-    candidate = re.sub(r"\s+", " ", candidate).strip(" ,.-")
-    return candidate or None
+    return clean_extracted_store_name(candidate)
 
 
 def _extract_lookup_name(text: str) -> str | None:
@@ -269,5 +272,4 @@ def _extract_lookup_name(text: str) -> str | None:
         flags=re.IGNORECASE,
     )
     candidate = re.sub(r"'s\b", "", candidate, flags=re.IGNORECASE)
-    candidate = re.sub(r"\s+", " ", candidate).strip(" ?.,")
-    return candidate or None
+    return clean_extracted_store_name(candidate)

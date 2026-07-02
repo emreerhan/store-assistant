@@ -209,6 +209,89 @@ def test_save_missing_phone_then_exact_phone() -> None:
     assert db.list_stores()[0].phone == "+15552345678"
 
 
+def test_save_name_extraction_strips_polite_suffix_before_phone_prompt() -> None:
+    db, controller = make_controller()
+
+    response = controller.handle_user_message("add brooklyn grocers please")
+
+    assert response.content == "What is the phone number for brooklyn grocers?"
+    assert controller.state == ConversationState.AWAITING_SAVE_PHONE
+    assert controller.pending_store_name == "brooklyn grocers"
+
+    response = controller.handle_user_message("(555) 222-3333")
+    assert "Saved brooklyn grocers" in response.content
+    assert db.list_stores()[0].display_name == "brooklyn grocers"
+
+
+def test_controller_cleans_polite_store_name_from_llm_output() -> None:
+    class PoliteNameLLM:
+        model_name = "polite-name"
+
+        def classify(self, message: str) -> IntentResult:
+            return IntentResult(Intent.SAVE, store_name="brooklyn grocers please")
+
+        def summarize(self, messages: list[dict[str, str]]) -> str:
+            return "summary"
+
+    db = StoreAssistantDB(":memory:")
+    db.init_schema()
+    controller = ConversationController(
+        db=db,
+        conversation_id=db.create_conversation(),
+        llm=PoliteNameLLM(),
+    )
+
+    response = controller.handle_user_message("add brooklyn grocers please")
+
+    assert response.content == "What is the phone number for brooklyn grocers?"
+    assert controller.pending_store_name == "brooklyn grocers"
+
+
+def test_unclear_save_name_prompts_for_store_name() -> None:
+    db, controller = make_controller()
+
+    response = controller.handle_user_message("add please")
+
+    assert response.content == "What is the store name?"
+    assert controller.state == ConversationState.AWAITING_SAVE_NAME
+    assert controller.pending_store_name is None
+
+
+def test_save_request_with_only_filler_name_prompts_for_store_name() -> None:
+    db, controller = make_controller()
+
+    response = controller.handle_user_message("add the store please")
+
+    assert response.content == "What is the store name?"
+    assert controller.state == ConversationState.AWAITING_SAVE_NAME
+    assert controller.pending_store_name is None
+
+
+def test_controller_clarifies_unclear_llm_store_name_output() -> None:
+    class UnclearNameLLM:
+        model_name = "unclear-name"
+
+        def classify(self, message: str) -> IntentResult:
+            return IntentResult(Intent.SAVE, store_name="please")
+
+        def summarize(self, messages: list[dict[str, str]]) -> str:
+            return "summary"
+
+    db = StoreAssistantDB(":memory:")
+    db.init_schema()
+    controller = ConversationController(
+        db=db,
+        conversation_id=db.create_conversation(),
+        llm=UnclearNameLLM(),
+    )
+
+    response = controller.handle_user_message("add please")
+
+    assert response.content == "What is the store name?"
+    assert controller.state == ConversationState.AWAITING_SAVE_NAME
+    assert controller.pending_store_name is None
+
+
 def test_awaiting_phone_spaced_number_requires_confirmation_before_save() -> None:
     db, controller = make_controller()
 
