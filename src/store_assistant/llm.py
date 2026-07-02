@@ -54,7 +54,9 @@ class PydanticAILLMClient:
             output_type=str,
             instructions=(
                 "Write a concise summary of the store assistant conversation. "
-                "Include successful operations, failed attempts, and off-scope attempts. "
+                "Include the actual store names and phone numbers saved or retrieved, "
+                "plus failed invalid-phone, rejected phone confirmation, incorrect "
+                "passphrase, not-found, and off-scope attempts when present. "
                 "Keep it to 2-4 short sentences."
             ),
         )
@@ -106,26 +108,59 @@ class HeuristicLLMClient:
     def summarize(self, messages: list[dict[str, str]]) -> str:
         user_messages = [m["content"] for m in messages if m["role"] == "user"]
         assistant_messages = [m["content"] for m in messages if m["role"] == "assistant"]
-        successes = sum(
-            1
-            for content in assistant_messages
-            if "saved" in content.lower() or "phone number is" in content.lower()
+        saved = []
+        retrieved = []
+        confirmations = 0
+        failures = []
+        off_scope_count = sum(
+            1 for content in user_messages if _looks_off_scope(content.lower())
         )
-        failures = sum(
-            1
-            for content in assistant_messages
-            if "valid us phone" in content.lower()
-            or "couldn't verify" in content.lower()
-            or "not found" in content.lower()
-        )
-        off_scope = sum(
-            1 for content in assistant_messages if "save or retrieve" in content.lower()
-        )
-        return (
-            f"The conversation had {len(user_messages)} user message(s), "
-            f"{successes} successful operation(s), {failures} failed attempt(s), "
-            f"and {off_scope} off-scope attempt(s)."
-        )
+        assistant_off_scope_count = 0
+
+        for content in assistant_messages:
+            saved_match = re.search(r"^Saved (.+) with phone (\+\d+)\.", content)
+            if saved_match:
+                saved.append(f"{saved_match.group(1)} ({saved_match.group(2)})")
+                continue
+
+            retrieved_match = re.search(r"^(.+)'s phone number is (\+\d+)\.", content)
+            if retrieved_match:
+                retrieved.append(
+                    f"{retrieved_match.group(1)} ({retrieved_match.group(2)})"
+                )
+                continue
+
+            lower = content.lower()
+            if "valid us phone" in lower:
+                failures.append("invalid phone format")
+            elif "did you mean" in lower:
+                confirmations += 1
+            elif "okay, please provide" in lower:
+                failures.append("phone format confirmation rejected")
+            elif "couldn't verify" in lower:
+                failures.append("incorrect lookup passphrase")
+            elif "could not find" in lower:
+                failures.append("store not found")
+            elif "save or retrieve" in lower:
+                assistant_off_scope_count += 1
+
+        off_scope_count = max(off_scope_count, assistant_off_scope_count)
+
+        parts = []
+        if saved:
+            parts.append("Saved " + ", ".join(saved) + ".")
+        if retrieved:
+            parts.append("Retrieved " + ", ".join(retrieved) + ".")
+        if confirmations:
+            parts.append(
+                f"Confirmed reformatted phone number(s) {confirmations} time(s)."
+            )
+        if failures:
+            unique_failures = list(dict.fromkeys(failures))
+            parts.append("Failed or incomplete attempts: " + ", ".join(unique_failures) + ".")
+        if off_scope_count:
+            parts.append(f"There were {off_scope_count} off-scope attempt(s).")
+        return " ".join(parts) or "No store operations were completed."
 
 
 def _looks_done(lower: str) -> bool:
@@ -195,7 +230,14 @@ def _extract_phone(text: str) -> str | None:
         r"(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}",
         text,
     )
-    return match.group(0) if match else None
+    if match:
+        return match.group(0)
+    trailing_match = re.search(
+        r"\b(?:with|at|is|as)\s+([+\d][\d\s().+-]*)$",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return trailing_match.group(1).strip() if trailing_match else None
 
 
 def _extract_save_name(text: str, phone: str | None) -> str | None:

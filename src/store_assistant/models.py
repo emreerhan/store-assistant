@@ -17,6 +17,7 @@ class ConversationState(StrEnum):
     IDLE = "idle"
     AWAITING_SAVE_NAME = "awaiting_save_name"
     AWAITING_SAVE_PHONE = "awaiting_save_phone"
+    AWAITING_PHONE_CONFIRMATION = "awaiting_phone_confirmation"
     AWAITING_LOOKUP_NAME = "awaiting_lookup_name"
     AWAITING_PASSPHRASE = "awaiting_passphrase"
     ENDED = "ended"

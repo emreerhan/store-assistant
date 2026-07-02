@@ -8,7 +8,7 @@ from store_assistant.db import StoreAssistantDB
 from store_assistant.llm import HeuristicLLMClient, LLMClient
 from store_assistant.models import AssistantResponse, ConversationState, Intent, IntentResult
 from store_assistant.normalization import clean_display_name, normalize_store_name
-from store_assistant.phone import normalize_us_phone
+from store_assistant.phone import interpret_us_phone
 
 
 MAX_OFF_SCOPE_ATTEMPTS = 3
@@ -22,6 +22,8 @@ class ConversationController:
     lookup_passphrase: str = "open-sesame"
     state: ConversationState = ConversationState.IDLE
     pending_store_name: str | None = None
+    pending_phone: str | None = None
+    pending_phone_display: str | None = None
     pending_lookup_name: str | None = None
     off_scope_count: int = 0
 
@@ -46,6 +48,8 @@ class ConversationController:
             return self._handle_save_name(text)
         if self.state == ConversationState.AWAITING_SAVE_PHONE:
             return self._handle_save_phone(text)
+        if self.state == ConversationState.AWAITING_PHONE_CONFIRMATION:
+            return self._handle_phone_confirmation(text)
         if self.state == ConversationState.AWAITING_LOOKUP_NAME:
             return self._handle_lookup_name(text)
         if self.state == ConversationState.AWAITING_PASSPHRASE:
@@ -96,13 +100,50 @@ class ConversationController:
         return self._save_store(self.pending_store_name, message)
 
     def _save_store(self, display_name: str, phone: str) -> AssistantResponse:
-        normalized_phone = normalize_us_phone(phone)
-        if normalized_phone is None:
+        interpreted_phone = interpret_us_phone(phone)
+        if interpreted_phone is None:
             self.state = ConversationState.AWAITING_SAVE_PHONE
             return self._assistant_message(
                 "Please provide a valid US phone number, such as (555) 234-5678."
             )
 
+        if not interpreted_phone.exact_format:
+            self.pending_store_name = clean_display_name(display_name)
+            self.pending_phone = interpreted_phone.normalized
+            self.pending_phone_display = interpreted_phone.display
+            self.state = ConversationState.AWAITING_PHONE_CONFIRMATION
+            return self._assistant_message(
+                f"Did you mean {interpreted_phone.display}? Reply yes to save it or no to enter it again."
+            )
+
+        return self._persist_store(display_name, interpreted_phone.normalized)
+
+    def _handle_phone_confirmation(self, message: str) -> AssistantResponse:
+        lower = message.strip().lower()
+        if lower in {"yes", "y", "correct", "that's right", "thats right"}:
+            if not self.pending_store_name or not self.pending_phone:
+                self.state = ConversationState.AWAITING_SAVE_NAME
+                return self._assistant_message("What is the store name?")
+            return self._persist_store(self.pending_store_name, self.pending_phone)
+
+        if lower in {"no", "n", "nope", "incorrect", "wrong"}:
+            store_name = self.pending_store_name
+            self.pending_phone = None
+            self.pending_phone_display = None
+            self.state = ConversationState.AWAITING_SAVE_PHONE
+            if store_name:
+                return self._assistant_message(
+                    f"Okay, please provide the phone number for {store_name} in the format (555) 234-5678."
+                )
+            return self._assistant_message(
+                "Okay, please provide the phone number in the format (555) 234-5678."
+            )
+
+        return self._assistant_message(
+            f"Please reply yes if you meant {self.pending_phone_display}, or no to enter it again."
+        )
+
+    def _persist_store(self, display_name: str, normalized_phone: str) -> AssistantResponse:
         normalized_name = normalize_store_name(display_name)
         if not normalized_name:
             self.state = ConversationState.AWAITING_SAVE_NAME
@@ -114,6 +155,8 @@ class ConversationController:
             phone=normalized_phone,
         )
         self.pending_store_name = None
+        self.pending_phone = None
+        self.pending_phone_display = None
         self.state = ConversationState.IDLE
         self.off_scope_count = 0
         return self._assistant_message(

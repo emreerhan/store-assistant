@@ -37,11 +37,22 @@ def test_invalid_phone_reprompts_and_does_not_save() -> None:
     assert stores[0].phone == "+15552345678"
 
 
+def test_save_supports_store_name_and_exact_phone_in_same_message() -> None:
+    db, controller = make_controller()
+
+    response = controller.handle_user_message(
+        "Save Trader Joe's with +1 (555) 234-5678"
+    )
+
+    assert "Saved Trader Joe's" in response.content
+    assert db.list_stores()[0].phone == "+15552345678"
+
+
 def test_partial_phone_in_save_request_is_not_added_to_store_name() -> None:
     db, controller = make_controller()
 
     response = controller.handle_user_message("save trader joe's supermarket with 123")
-    assert response.content == "What is the phone number for trader joe's supermarket?"
+    assert "valid US phone" in response.content
 
     response = controller.handle_user_message("(667) 123-4321")
     assert "Saved trader joe's supermarket" in response.content
@@ -56,9 +67,28 @@ def test_us_phone_validation_is_format_level() -> None:
     db, controller = make_controller()
 
     response = controller.handle_user_message("Save Corner Market with 1234321235")
+    assert response.content == (
+        "Did you mean (123) 432-1235? Reply yes to save it or no to enter it again."
+    )
+    assert db.list_stores() == []
 
+    response = controller.handle_user_message("yes")
     assert "Saved Corner Market" in response.content
     assert db.list_stores()[0].phone == "+11234321235"
+
+
+def test_phone_confirmation_can_be_rejected_and_reentered() -> None:
+    db, controller = make_controller()
+
+    response = controller.handle_user_message("Save Corner Market with 1234321235")
+    assert "Did you mean (123) 432-1235" in response.content
+
+    response = controller.handle_user_message("no")
+    assert "format (555) 234-5678" in response.content
+
+    response = controller.handle_user_message("(222) 333-4444")
+    assert "Saved Corner Market" in response.content
+    assert db.list_stores()[0].phone == "+12223334444"
 
 
 def test_lookup_is_gated_by_passphrase() -> None:
@@ -83,7 +113,9 @@ def test_repeated_mixed_operations_in_one_conversation() -> None:
     controller.handle_user_message("Save Trader Joe's with (555) 234-5678")
     controller.handle_user_message("Lookup Trader Joe")
     controller.handle_user_message("open-sesame")
-    controller.handle_user_message("Save Whole Foods with 555-345-6789")
+    response = controller.handle_user_message("Save Whole Foods with 555-345-6789")
+    assert "Did you mean (555) 345-6789" in response.content
+    controller.handle_user_message("yes")
 
     stores = db.list_stores()
     assert [store.display_name for store in stores] == ["Trader Joe's", "Whole Foods"]
@@ -108,7 +140,7 @@ def test_off_scope_termination_saves_summary() -> None:
 def test_messages_and_llm_traces_are_persisted() -> None:
     db, controller = make_controller()
 
-    controller.handle_user_message("Save Aldi with 555-456-7890")
+    controller.handle_user_message("Save Aldi with (555) 456-7890")
     controller.handle_user_message("I'm done")
 
     messages = db.list_messages(controller.conversation_id)
@@ -116,3 +148,31 @@ def test_messages_and_llm_traces_are_persisted() -> None:
 
     assert [message["role"] for message in messages][:2] == ["user", "assistant"]
     assert {trace["call_type"] for trace in traces} >= {"intent", "summary"}
+
+
+def test_summary_includes_actual_session_activity() -> None:
+    db, controller = make_controller()
+
+    controller.handle_user_message("Save Aldi with (555) 456-7890")
+    controller.handle_user_message("Lookup Aldi")
+    controller.handle_user_message("wrong")
+    controller.handle_user_message("open-sesame")
+    controller.handle_user_message("I'm done")
+
+    summary = db.list_summaries()[0]["summary"]
+    assert "Saved Aldi (+15554567890)" in summary
+    assert "Retrieved Aldi (+15554567890)" in summary
+    assert "incorrect lookup passphrase" in summary
+
+
+def test_summary_separates_successful_phone_confirmation_from_failures() -> None:
+    db, controller = make_controller()
+
+    controller.handle_user_message("Save Aldi with 555-456-7890")
+    controller.handle_user_message("yes")
+    controller.handle_user_message("I'm done")
+
+    summary = db.list_summaries()[0]["summary"]
+    assert "Saved Aldi (+15554567890)" in summary
+    assert "Confirmed reformatted phone number(s) 1 time(s)" in summary
+    assert "Failed or incomplete attempts" not in summary
