@@ -3,7 +3,7 @@ from __future__ import annotations
 from store_assistant.controller import ConversationController
 from store_assistant.db import StoreAssistantDB
 from store_assistant.llm import HeuristicLLMClient
-from store_assistant.models import ConversationState
+from store_assistant.models import ConversationState, Intent, IntentResult
 
 
 def make_controller(passphrase: str = "open-sesame") -> tuple[StoreAssistantDB, ConversationController]:
@@ -89,6 +89,37 @@ def test_overlong_phone_in_save_request_reprompts_and_does_not_save() -> None:
     response = controller.handle_user_message("(433) 213-2132")
     assert "Saved whole foods c" in response.content
     assert db.list_stores()[0].phone == "+14332132132"
+
+
+def test_controller_rejects_overlong_phone_even_if_llm_extracts_valid_substring() -> None:
+    class BadExtractionLLM:
+        model_name = "bad-extraction"
+
+        def classify(self, message: str) -> IntentResult:
+            return IntentResult(
+                Intent.SAVE,
+                store_name="brooklyn grocers",
+                phone="222 333 5555",
+            )
+
+        def summarize(self, messages: list[dict[str, str]]) -> str:
+            return "summary"
+
+    db = StoreAssistantDB(":memory:")
+    db.init_schema()
+    controller = ConversationController(
+        db=db,
+        conversation_id=db.create_conversation(),
+        llm=BadExtractionLLM(),
+    )
+
+    response = controller.handle_user_message(
+        "save brooklyn grocers with 3 222 333 5555"
+    )
+
+    assert "valid US phone" in response.content
+    assert controller.state == ConversationState.AWAITING_SAVE_PHONE
+    assert db.list_stores() == []
 
 
 def test_phone_confirmation_can_be_rejected_and_reentered() -> None:

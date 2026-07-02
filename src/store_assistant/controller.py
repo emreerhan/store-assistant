@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from typing import Callable
@@ -12,6 +13,10 @@ from store_assistant.phone import interpret_us_phone
 
 
 MAX_OFF_SCOPE_ATTEMPTS = 3
+_PHONE_TAIL_RE = re.compile(
+    r"\b(?:with|at|is|as)\s+([+\d][\d\s().+-]*)$",
+    flags=re.IGNORECASE,
+)
 
 
 @dataclass
@@ -60,7 +65,7 @@ class ConversationController:
             return self._end_conversation("user_done")
         if intent.intent == Intent.SAVE:
             self.off_scope_count = 0
-            return self._start_save(intent)
+            return self._start_save(intent, text)
         if intent.intent == Intent.LOOKUP:
             self.off_scope_count = 0
             return self._start_lookup(intent)
@@ -70,19 +75,22 @@ class ConversationController:
     def is_ended(self) -> bool:
         return self.state == ConversationState.ENDED
 
-    def _start_save(self, intent: IntentResult) -> AssistantResponse:
+    def _start_save(
+        self, intent: IntentResult, original_message: str | None = None
+    ) -> AssistantResponse:
         if not intent.store_name:
             self.state = ConversationState.AWAITING_SAVE_NAME
             return self._assistant_message("What is the store name?")
 
         self.pending_store_name = clean_display_name(intent.store_name)
-        if not intent.phone:
+        phone = _extract_trailing_phone_candidate(original_message) or intent.phone
+        if not phone:
             self.state = ConversationState.AWAITING_SAVE_PHONE
             return self._assistant_message(
                 f"What is the phone number for {self.pending_store_name}?"
             )
 
-        return self._save_store(self.pending_store_name, intent.phone)
+        return self._save_store(self.pending_store_name, phone)
 
     def _handle_save_name(self, message: str) -> AssistantResponse:
         name = clean_display_name(message)
@@ -280,3 +288,10 @@ def _serialize_output(output: object) -> dict[str, object]:
     if isinstance(output, IntentResult):
         return output.to_dict()
     return {"output": str(output)}
+
+
+def _extract_trailing_phone_candidate(message: str | None) -> str | None:
+    if not message:
+        return None
+    match = _PHONE_TAIL_RE.search(message)
+    return match.group(1).strip() if match else None
