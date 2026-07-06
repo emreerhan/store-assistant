@@ -53,6 +53,17 @@ class ConversationController:
         if self._looks_done(text):
             return self._end_conversation("user_done")
 
+        if (
+            self.state
+            in {
+                ConversationState.AWAITING_SAVE_PHONE,
+                ConversationState.AWAITING_PHONE_CONFIRMATION,
+                ConversationState.AWAITING_PASSPHRASE,
+            }
+            and self._looks_off_scope(text)
+        ):
+            return self._handle_off_scope()
+
         if self.state == ConversationState.AWAITING_SAVE_NAME:
             return self._handle_save_name(text)
         if self.state == ConversationState.AWAITING_SAVE_PHONE:
@@ -288,6 +299,10 @@ class ConversationController:
     @staticmethod
     def _looks_done(message: str) -> bool:
         return HeuristicLLMClient().classify(message).intent == Intent.DONE
+
+    @staticmethod
+    def _looks_off_scope(message: str) -> bool:
+        return HeuristicLLMClient().classify(message).intent == Intent.OFF_SCOPE
 
 
 def _serialize_output(output: object) -> dict[str, object]:

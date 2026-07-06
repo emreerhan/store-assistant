@@ -120,6 +120,17 @@ class StoreAssistantDB:
             )
         )
 
+    def list_all_messages(self) -> list[sqlite3.Row]:
+        return list(
+            self.conn.execute(
+                """
+                SELECT id, conversation_id, role, content, created_at
+                FROM messages
+                ORDER BY id DESC
+                """
+            )
+        )
+
     def save_summary(self, conversation_id: int, summary: str) -> None:
         self.conn.execute(
             """

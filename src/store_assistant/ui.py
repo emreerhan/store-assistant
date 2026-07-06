@@ -23,8 +23,8 @@ def main() -> None:
     controller = st.session_state.controller
     db = st.session_state.db
 
-    chat_tab, stores_tab, summaries_tab, traces_tab = st.tabs(
-        ["Chat", "Stores", "Summaries", "Traces"]
+    chat_tab, stores_tab, messages_tab, summaries_tab, traces_tab = st.tabs(
+        ["Chat", "Stores", "Messages", "Summaries", "Traces"]
     )
 
     with chat_tab:
@@ -69,6 +69,25 @@ def main() -> None:
             )
         else:
             st.caption("No stores saved.")
+
+    with messages_tab:
+        messages = db.list_all_messages()
+        if messages:
+            st.dataframe(
+                [
+                    {
+                        "Conversation": row["conversation_id"],
+                        "Role": row["role"],
+                        "Message": row["content"],
+                        "Created": row["created_at"],
+                    }
+                    for row in messages
+                ],
+                width="stretch",
+                hide_index=True,
+            )
+        else:
+            st.caption("No messages saved.")
 
     with summaries_tab:
         summaries = db.list_summaries()

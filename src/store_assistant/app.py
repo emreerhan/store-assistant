@@ -16,7 +16,10 @@ def create_db(settings: Settings | None = None) -> StoreAssistantDB:
 def create_llm_client(settings: Settings | None = None) -> LLMClient:
     resolved_settings = settings or load_settings()
     if resolved_settings.openai_api_key:
-        return PydanticAILLMClient(resolved_settings.openai_model)
+        return PydanticAILLMClient(
+            resolved_settings.openai_model,
+            api_key=resolved_settings.openai_api_key,
+        )
     return HeuristicLLMClient()
 
 

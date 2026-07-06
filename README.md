@@ -18,7 +18,7 @@ export STORE_LOOKUP_PASSPHRASE="open-sesame"
 export STORE_ASSISTANT_DB_PATH="data/store_assistant.sqlite3"
 ```
 
-`STORE_LOOKUP_PASSPHRASE` defaults to `open-sesame`. `STORE_ASSISTANT_DB_PATH` defaults to `data/store_assistant.sqlite3`.
+`STORE_LOOKUP_PASSPHRASE` defaults to `open-sesame`. `STORE_ASSISTANT_DB_PATH` defaults to `data/store_assistant.sqlite3`. If `OPENAI_API_KEY` is not set, the app also checks local `openai_api_key.txt` and `openapi_key.txt` files in the project root.
 
 ## Run the Demo
 
@@ -35,3 +35,9 @@ python -m pytest
 ```
 
 Tests use a deterministic fake/heuristic LLM client and do not require live OpenAI calls.
+
+To include the live OpenAI integration test:
+
+```bash
+STORE_ASSISTANT_RUN_LIVE_OPENAI=1 python -m pytest
+```

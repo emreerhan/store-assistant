@@ -33,12 +33,18 @@ class IntentExtraction(BaseModel):
 
 
 class PydanticAILLMClient:
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, api_key: str | None = None):
         from pydantic_ai import Agent
+        from pydantic_ai.models.openai import OpenAIResponsesModel
+        from pydantic_ai.providers.openai import OpenAIProvider
 
         self.model_name = model_name
+        model = model_name
+        if model_name.startswith("openai:"):
+            provider = OpenAIProvider(api_key=api_key)
+            model = OpenAIResponsesModel(model_name.removeprefix("openai:"), provider=provider)
         self._intent_agent = Agent(
-            model_name,
+            model,
             output_type=IntentExtraction,
             instructions=(
                 "You classify messages for a narrow store phone assistant. "
@@ -54,7 +60,7 @@ class PydanticAILLMClient:
             ),
         )
         self._summary_agent = Agent(
-            model_name,
+            model,
             output_type=str,
             instructions=(
                 "Write a concise summary of the store assistant conversation. "

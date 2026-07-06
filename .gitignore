@@ -1,4 +1,6 @@
 .env
+openai_api_key.txt
+openapi_key.txt
 .venv/
 .pytest_cache/
 .ruff_cache/

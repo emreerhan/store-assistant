@@ -11,6 +11,7 @@ def run_app_with_db(tmp_path: Path) -> tuple[AppTest, Path]:
     db_path = tmp_path / "store_assistant.sqlite3"
     os.environ["STORE_ASSISTANT_DB_PATH"] = str(db_path)
     os.environ["STORE_LOOKUP_PASSPHRASE"] = "open-sesame"
+    os.environ["OPENAI_API_KEY_FILE"] = str(tmp_path / "missing_openapi_key.txt")
     os.environ.pop("OPENAI_API_KEY", None)
     app = AppTest.from_file("streamlit_app.py")
     app.run()
@@ -43,6 +44,10 @@ def test_streamlit_exact_save_lookup_and_summary(tmp_path: Path) -> None:
     trace_types = fetch_rows(db_path, "select call_type from llm_traces order by id")
     assert ("intent",) in trace_types
     assert ("summary",) in trace_types
+    assert fetch_rows(db_path, "select role from messages order by id limit 2") == [
+        ("user",),
+        ("assistant",),
+    ]
 
 
 def test_streamlit_convertible_phone_requires_confirmation(tmp_path: Path) -> None:

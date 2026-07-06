@@ -382,6 +382,36 @@ def test_off_scope_termination_saves_summary() -> None:
     assert "off-scope" in summaries[0]["summary"]
 
 
+def test_off_scope_termination_works_while_awaiting_phone() -> None:
+    db, controller = make_controller()
+
+    controller.handle_user_message("Save Aldi")
+    controller.handle_user_message("Tell me a joke")
+    controller.handle_user_message("What is the weather?")
+    response = controller.handle_user_message("Recommend a movie")
+
+    assert response.ended is True
+    assert response.end_reason == "off_scope_limit"
+    assert controller.state == ConversationState.ENDED
+    assert db.list_stores() == []
+    assert len(db.list_summaries()) == 1
+
+
+def test_off_scope_termination_works_while_awaiting_passphrase() -> None:
+    db, controller = make_controller()
+
+    controller.handle_user_message("Save Aldi with (555) 456-7890")
+    controller.handle_user_message("Lookup Aldi")
+    controller.handle_user_message("Tell me a joke")
+    controller.handle_user_message("What is the weather?")
+    response = controller.handle_user_message("Recommend a movie")
+
+    assert response.ended is True
+    assert response.end_reason == "off_scope_limit"
+    assert controller.state == ConversationState.ENDED
+    assert len(db.list_summaries()) == 1
+
+
 def test_messages_and_llm_traces_are_persisted() -> None:
     db, controller = make_controller()
 
@@ -389,9 +419,14 @@ def test_messages_and_llm_traces_are_persisted() -> None:
     controller.handle_user_message("I'm done")
 
     messages = db.list_messages(controller.conversation_id)
+    all_messages = db.list_all_messages()
     traces = db.list_traces()
 
     assert [message["role"] for message in messages][:2] == ["user", "assistant"]
+    assert [message["role"] for message in reversed(all_messages)][0:2] == [
+        "user",
+        "assistant",
+    ]
     assert {trace["call_type"] for trace in traces} >= {"intent", "summary"}
 
 
